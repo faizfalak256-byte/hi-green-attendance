@@ -1,0 +1,6 @@
+{
+  "name": "HI GREEN Attendance",
+  "description": "Employee & HOD attendance, QR check-in/out, overtime tracking, and Excel reporting app for HI GREEN CARBON LIMITED.",
+  "requestFramePermissions": [],
+  "majorC deapab4ilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

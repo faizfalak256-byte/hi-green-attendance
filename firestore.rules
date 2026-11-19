@@ -1,0 +1,182 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidShift(shift) {
+      return shift in ['GENERAL', 'MORNING_A', 'EVENING_B', 'NIGHT_C'];
+    }
+
+    function isValidEmployee(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.employeeCode is string && data.employeeCode.size() >= 2 && data.employeeCode.size() <= 32 &&
+             data.fullName is string && data.fullName.size() >= 2 && data.fullName.size() <= 80 &&
+             data.username is string && data.username.size() >= 3 && data.username.size() <= 40 &&
+             data.username.matches('^[a-z0-9._-]+$') &&
+             data.passwordDigest is string && data.passwordDigest.size() >= 20 && data.passwordDigest.size() <= 256 &&
+             data.role in ['HOD', 'EMPLOYEE'] &&
+             data.department is string && data.department.size() >= 2 && data.department.size() <= 60 &&
+             data.designation is string && data.designation.size() >= 2 && data.designation.size() <= 60 &&
+             isValidShift(data.shift) &&
+             data.active is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidAttendance(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             isValidId(data.employeeDocId) &&
+             data.employeeCode is string && data.employeeCode.size() >= 1 && data.employeeCode.size() <= 32 &&
+             data.employeeName is string && data.employeeName.size() >= 1 && data.employeeName.size() <= 80 &&
+             data.department is string && data.department.size() >= 1 && data.department.size() <= 60 &&
+             isValidShift(data.shift) &&
+             data.dateKey is string && data.dateKey.matches('^\\d{4}-\\d{2}-\\d{2}$') &&
+             data.monthKey is string && data.monthKey.matches('^\\d{4}-\\d{2}$') &&
+             data.status in ['PRESENT', 'HALF_DAY', 'ABSENT'] &&
+             data.checkInTimeMs is int && data.checkInTimeMs >= 0 &&
+             data.checkOutTimeMs is int && data.checkOutTimeMs >= 0 &&
+             data.workedMinutes is int && data.workedMinutes >= 0 && data.workedMinutes <= 1440 &&
+             data.scanMethod in ['QR', 'MANUAL', 'HOD_CORRECTED'] &&
+             data.note is string && data.note.size() <= 200 &&
+             data.correctedByHod is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidOvertime(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             isValidId(data.employeeDocId) &&
+             data.employeeCode is string && data.employeeCode.size() >= 1 && data.employeeCode.size() <= 32 &&
+             data.employeeName is string && data.employeeName.size() >= 1 && data.employeeName.size() <= 80 &&
+             data.department is string && data.department.size() >= 1 && data.department.size() <= 60 &&
+             data.dateKey is string && data.dateKey.matches('^\\d{4}-\\d{2}-\\d{2}$') &&
+             data.monthKey is string && data.monthKey.matches('^\\d{4}-\\d{2}$') &&
+             (data.hours is int || data.hours is float) && data.hours > 0 && data.hours <= 16 &&
+             data.reason is string && data.reason.size() >= 2 && data.reason.size() <= 200 &&
+             data.approved is bool &&
+             data.editedByHod is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    match /users/{userId}/employees/{employeeDocId} {
+      allow list: if isOwner(userId);
+      allow get: if isOwner(userId) && isValidId(employeeDocId);
+      allow create: if isOwner(userId) &&
+                       isValidId(employeeDocId) &&
+                       incoming().userId == userId &&
+                       incoming().keys().hasAll([
+                         'userId', 'employeeCode', 'fullName', 'username',
+                         'passwordDigest', 'role', 'department', 'designation',
+                         'shift', 'active', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'employeeCode', 'fullName', 'username',
+                         'passwordDigest', 'role', 'department', 'designation',
+                         'shift', 'active', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidEmployee(incoming());
+      allow update: if isOwner(userId) &&
+                       isValidId(employeeDocId) &&
+                       isValidEmployee(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'employeeCode', 'fullName', 'username', 'passwordDigest',
+                         'role', 'department', 'designation', 'shift', 'active', 'updatedAt'
+                       ]);
+      allow delete: if isOwner(userId) && isValidId(employeeDocId);
+    }
+
+    match /users/{userId}/attendance/{attendanceDocId} {
+      allow list: if isOwner(userId);
+      allow get: if isOwner(userId) && isValidId(attendanceDocId);
+      allow create: if isOwner(userId) &&
+                       isValidId(attendanceDocId) &&
+                       incoming().userId == userId &&
+                       incoming().keys().hasAll([
+                         'userId', 'employeeDocId', 'employeeCode', 'employeeName',
+                         'department', 'shift', 'dateKey', 'monthKey', 'status',
+                         'checkInTimeMs', 'checkOutTimeMs', 'workedMinutes',
+                         'scanMethod', 'note', 'correctedByHod', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'employeeDocId', 'employeeCode', 'employeeName',
+                         'department', 'shift', 'dateKey', 'monthKey', 'status',
+                         'checkInTimeMs', 'checkOutTimeMs', 'workedMinutes',
+                         'scanMethod', 'note', 'correctedByHod', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidAttendance(incoming());
+      allow update: if isOwner(userId) &&
+                       isValidId(attendanceDocId) &&
+                       isValidAttendance(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().employeeDocId == existing().employeeDocId &&
+                       incoming().dateKey == existing().dateKey &&
+                       incoming().createdAt == existing().createdAt &&
+                       (
+                         // Employee check-out action
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'checkOutTimeMs', 'workedMinutes', 'status', 'scanMethod', 'updatedAt'
+                         ]) ||
+                         // HOD attendance correction / status adjustment action
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'status', 'checkInTimeMs', 'checkOutTimeMs', 'workedMinutes',
+                           'scanMethod', 'note', 'correctedByHod', 'updatedAt'
+                         ])
+                       );
+      allow delete: if isOwner(userId) && isValidId(attendanceDocId);
+    }
+
+    match /users/{userId}/overtime/{overtimeDocId} {
+      allow list: if isOwner(userId);
+      allow get: if isOwner(userId) && isValidId(overtimeDocId);
+      allow create: if isOwner(userId) &&
+                       isValidId(overtimeDocId) &&
+                       incoming().userId == userId &&
+                       incoming().keys().hasAll([
+                         'userId', 'employeeDocId', 'employeeCode', 'employeeName',
+                         'department', 'dateKey', 'monthKey', 'hours', 'reason',
+                         'approved', 'editedByHod', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'employeeDocId', 'employeeCode', 'employeeName',
+                         'department', 'dateKey', 'monthKey', 'hours', 'reason',
+                         'approved', 'editedByHod', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidOvertime(incoming());
+      allow update: if isOwner(userId) &&
+                       isValidId(overtimeDocId) &&
+                       isValidOvertime(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().employeeDocId == existing().employeeDocId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'dateKey', 'monthKey', 'hours', 'reason', 'approved', 'editedByHod', 'updatedAt'
+                       ]);
+      allow delete: if isOwner(userId) && isValidId(overtimeDocId);
+    }
+  }
+}

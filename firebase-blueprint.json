@@ -1,0 +1,129 @@
+{
+  "entities": {
+    "Employee": {
+      "title": "Employee",
+      "description": "Employee or HOD profile with securely hashed credentials and role assignment.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner organization Firebase Auth UID" },
+        "employeeCode": { "type": "string", "description": "Company employee ID such as HGC-001" },
+        "fullName": { "type": "string" },
+        "username": { "type": "string", "description": "Lowercase unique login username" },
+        "passwordDigest": { "type": "string", "description": "PBKDF2 salted password hash (never plain-text)" },
+        "role": { "type": "string", "enum": ["HOD", "EMPLOYEE"] },
+        "department": { "type": "string" },
+        "designation": { "type": "string" },
+        "shift": { "type": "string", "enum": ["GENERAL", "MORNING_A", "EVENING_B", "NIGHT_C"] },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": [
+        "userId",
+        "employeeCode",
+        "fullName",
+        "username",
+        "passwordDigest",
+        "role",
+        "department",
+        "designation",
+        "shift",
+        "active",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AttendanceRecord": {
+      "title": "AttendanceRecord",
+      "description": "Daily attendance record keyed deterministically by employeeDocId_dateKey to prevent duplicates.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner organization Firebase Auth UID" },
+        "employeeDocId": { "type": "string" },
+        "employeeCode": { "type": "string" },
+        "employeeName": { "type": "string" },
+        "department": { "type": "string" },
+        "shift": { "type": "string", "enum": ["GENERAL", "MORNING_A", "EVENING_B", "NIGHT_C"] },
+        "dateKey": { "type": "string", "description": "YYYY-MM-DD local date key" },
+        "monthKey": { "type": "string", "description": "YYYY-MM month key for 3-month retention and reports" },
+        "status": { "type": "string", "enum": ["PRESENT", "HALF_DAY", "ABSENT"] },
+        "checkInTimeMs": { "type": "integer" },
+        "checkOutTimeMs": { "type": "integer" },
+        "workedMinutes": { "type": "integer" },
+        "scanMethod": { "type": "string", "enum": ["QR", "MANUAL", "HOD_CORRECTED"] },
+        "note": { "type": "string" },
+        "correctedByHod": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": [
+        "userId",
+        "employeeDocId",
+        "employeeCode",
+        "employeeName",
+        "department",
+        "shift",
+        "dateKey",
+        "monthKey",
+        "status",
+        "checkInTimeMs",
+        "checkOutTimeMs",
+        "workedMinutes",
+        "scanMethod",
+        "note",
+        "correctedByHod",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "OvertimeRecord": {
+      "title": "OvertimeRecord",
+      "description": "Daily overtime entry per employee.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner organization Firebase Auth UID" },
+        "employeeDocId": { "type": "string" },
+        "employeeCode": { "type": "string" },
+        "employeeName": { "type": "string" },
+        "department": { "type": "string" },
+        "dateKey": { "type": "string", "description": "YYYY-MM-DD" },
+        "monthKey": { "type": "string", "description": "YYYY-MM" },
+        "hours": { "type": "number" },
+        "reason": { "type": "string" },
+        "approved": { "type": "boolean" },
+        "editedByHod": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": [
+        "userId",
+        "employeeDocId",
+        "employeeCode",
+        "employeeName",
+        "department",
+        "dateKey",
+        "monthKey",
+        "hours",
+        "reason",
+        "approved",
+        "editedByHod",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/employees/{employeeDocId}": {
+      "schema": { "$ref": "#/entities/Employee" },
+      "description": "Employees and HOD profiles scoped to workspace owner UID."
+    },
+    "/users/{userId}/attendance/{attendanceDocId}": {
+      "schema": { "$ref": "#/entities/AttendanceRecord" },
+      "description": "Daily attendance records (latest 3 months retained) scoped to workspace owner UID."
+    },
+    "/users/{userId}/overtime/{overtimeDocId}": {
+      "schema": { "$ref": "#/entities/OvertimeRecord" },
+      "description": "Overtime records (latest 3 months retained) scoped to workspace owner UID."
+    }
+  }
+}
